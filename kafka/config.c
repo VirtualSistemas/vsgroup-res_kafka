@@ -1,7 +1,7 @@
 /*
  * Asterisk -- An open source telephony toolkit.
  *
- * Copyright 2015-2024 The Wazo Authors  (see the AUTHORS file)
+ * Copyright 2026 VSGroup (Virtual Sistemas e Tecnologia Ltda)  (see the AUTHORS file)
  *
  * See http://www.asterisk.org for more information about
  * the Asterisk project. Please do not directly contact
@@ -215,6 +215,36 @@ static int validate_connection_cb(void *obj, void *arg, int flags)
 		cxn_conf->reconnect_backoff_max_ms = cxn_conf->reconnect_backoff_ms;
 	}
 
+	/* Consumer-specific validation */
+	if (!ast_strlen_zero(cxn_conf->auto_offset_reset) &&
+		strcasecmp(cxn_conf->auto_offset_reset, "earliest") &&
+		strcasecmp(cxn_conf->auto_offset_reset, "latest") &&
+		strcasecmp(cxn_conf->auto_offset_reset, "none")) {
+		ast_log(LOG_ERROR, "%s: invalid auto_offset_reset '%s' "
+			"(must be earliest, latest, or none)\n",
+			cxn_conf->name, cxn_conf->auto_offset_reset);
+		*validation_res = -1;
+		return -1;
+	}
+
+	if (cxn_conf->auto_commit_interval_ms < 1) {
+		ast_log(LOG_WARNING, "%s: invalid auto_commit_interval_ms %d, using 5000\n",
+			cxn_conf->name, cxn_conf->auto_commit_interval_ms);
+		cxn_conf->auto_commit_interval_ms = 5000;
+	}
+
+	if (cxn_conf->session_timeout_ms < 1000) {
+		ast_log(LOG_WARNING, "%s: invalid session_timeout_ms %d, using 45000\n",
+			cxn_conf->name, cxn_conf->session_timeout_ms);
+		cxn_conf->session_timeout_ms = 45000;
+	}
+
+	if (cxn_conf->max_poll_interval_ms < 1000) {
+		ast_log(LOG_WARNING, "%s: invalid max_poll_interval_ms %d, using 300000\n",
+			cxn_conf->name, cxn_conf->max_poll_interval_ms);
+		cxn_conf->max_poll_interval_ms = 300000;
+	}
+
 	return 0;
 }
 
@@ -330,6 +360,9 @@ int kafka_config_init(void)
 	static char default_retries_str[16];
 	static char default_reconnect_backoff_ms_str[12];
 	static char default_reconnect_backoff_max_ms_str[12];
+	static char default_auto_commit_interval_ms_str[12];
+	static char default_session_timeout_ms_str[12];
+	static char default_max_poll_interval_ms_str[12];
 
 	snprintf(default_message_max_bytes_str, sizeof(default_message_max_bytes_str),
 		"%d", 1000000);
@@ -357,6 +390,12 @@ int kafka_config_init(void)
 		"%d", 100);
 	snprintf(default_reconnect_backoff_max_ms_str, sizeof(default_reconnect_backoff_max_ms_str),
 		"%d", 10000);
+	snprintf(default_auto_commit_interval_ms_str, sizeof(default_auto_commit_interval_ms_str),
+		"%d", 5000);
+	snprintf(default_session_timeout_ms_str, sizeof(default_session_timeout_ms_str),
+		"%d", 45000);
+	snprintf(default_max_poll_interval_ms_str, sizeof(default_max_poll_interval_ms_str),
+		"%d", 300000);
 
 	if (aco_info_init(&cfg_info) != 0) {
 		ast_log(LOG_ERROR, "Failed to initialize config\n");
@@ -451,6 +490,26 @@ int kafka_config_init(void)
 	aco_option_register(&cfg_info, "enable_idempotence", ACO_EXACT,
 		connection_options, "no", OPT_BOOL_T, 1,
 		FLDSET(struct kafka_conf_connection, enable_idempotence));
+
+	/* Consumer-specific fields */
+	aco_option_register(&cfg_info, "group_id", ACO_EXACT,
+		connection_options, "", OPT_STRINGFIELD_T, 0,
+		STRFLDSET(struct kafka_conf_connection, group_id));
+	aco_option_register(&cfg_info, "auto_offset_reset", ACO_EXACT,
+		connection_options, "latest", OPT_STRINGFIELD_T, 0,
+		STRFLDSET(struct kafka_conf_connection, auto_offset_reset));
+	aco_option_register(&cfg_info, "enable_auto_commit", ACO_EXACT,
+		connection_options, "yes", OPT_BOOL_T, 1,
+		FLDSET(struct kafka_conf_connection, enable_auto_commit));
+	aco_option_register(&cfg_info, "auto_commit_interval_ms", ACO_EXACT,
+		connection_options, default_auto_commit_interval_ms_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, auto_commit_interval_ms));
+	aco_option_register(&cfg_info, "session_timeout_ms", ACO_EXACT,
+		connection_options, default_session_timeout_ms_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, session_timeout_ms));
+	aco_option_register(&cfg_info, "max_poll_interval_ms", ACO_EXACT,
+		connection_options, default_max_poll_interval_ms_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, max_poll_interval_ms));
 
 	return process_config(0);
 }

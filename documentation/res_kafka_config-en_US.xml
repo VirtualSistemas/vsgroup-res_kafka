@@ -2,7 +2,7 @@
 <!DOCTYPE docs SYSTEM "appdocsxml.dtd">
 <docs xmlns:xi="http://www.w3.org/2001/XInclude">
    <configInfo name="res_kafka" language="en_US">
-       <synopsis>Kafka producer API</synopsis>
+       <synopsis>Kafka producer and consumer API</synopsis>
        <configFile name="kafka.conf">
            <configObject name="general">
                <synopsis>General configuration settings</synopsis>
@@ -196,6 +196,51 @@
                    <description>
                        <para>Comma-separated list of librdkafka debug contexts
                        (e.g. <literal>broker,topic,msg</literal>). Empty by default.</para>
+                   </description>
+               </configOption>
+               <configOption name="group_id">
+                   <synopsis>Consumer group ID</synopsis>
+                   <description>
+                       <para>Consumer group identifier. Required for consumer mode.
+                       Empty by default (consumer disabled for this connection).</para>
+                   </description>
+               </configOption>
+               <configOption name="auto_offset_reset">
+                   <synopsis>Consumer auto offset reset policy</synopsis>
+                   <description>
+                       <para>Action to take when there is no initial offset or if the
+                       current offset no longer exists: <literal>earliest</literal>,
+                       <literal>latest</literal>, or <literal>none</literal>.
+                       Defaults to <literal>latest</literal>.</para>
+                   </description>
+               </configOption>
+               <configOption name="enable_auto_commit">
+                   <synopsis>Enable automatic offset commit</synopsis>
+                   <description>
+                       <para>Automatically commit consumer offsets periodically.
+                       Defaults to yes.</para>
+                   </description>
+               </configOption>
+               <configOption name="auto_commit_interval_ms">
+                   <synopsis>Auto commit interval in milliseconds</synopsis>
+                   <description>
+                       <para>How often to auto-commit consumer offsets.
+                       Defaults to 5000.</para>
+                   </description>
+               </configOption>
+               <configOption name="session_timeout_ms">
+                   <synopsis>Consumer session timeout in milliseconds</synopsis>
+                   <description>
+                       <para>Client group session and failure detection timeout.
+                       If no heartbeat is received by the broker within this time,
+                       the consumer is removed from the group. Defaults to 45000.</para>
+                   </description>
+               </configOption>
+               <configOption name="max_poll_interval_ms">
+                   <synopsis>Maximum consumer poll interval in milliseconds</synopsis>
+                   <description>
+                       <para>Maximum time between poll calls before the consumer is
+                       considered failed. Defaults to 300000.</para>
                    </description>
                </configOption>
            </configObject>

@@ -1,7 +1,7 @@
 /*
  * Asterisk -- An open source telephony toolkit.
  *
- * Copyright 2015-2024 The Wazo Authors  (see the AUTHORS file)
+ * Copyright 2026 VSGroup (Virtual Sistemas e Tecnologia Ltda)  (see the AUTHORS file)
  *
  * See http://www.asterisk.org for more information about
  * the Asterisk project. Please do not directly contact
@@ -89,6 +89,10 @@ struct kafka_conf_connection {
 	AST_STRING_FIELD(compression_codec);
 	/*! librdkafka debug contexts (comma-separated) */
 	AST_STRING_FIELD(debug);
+	/*! Consumer group ID (required for consumer) */
+	AST_STRING_FIELD(group_id);
+	/*! Consumer auto offset reset: earliest, latest, none */
+	AST_STRING_FIELD(auto_offset_reset);
 	);
 
 	/*! Maximum message size in bytes */
@@ -119,6 +123,14 @@ struct kafka_conf_connection {
 	int reconnect_backoff_ms;
 	/*! Maximum reconnect backoff in milliseconds */
 	int reconnect_backoff_max_ms;
+	/*! Enable automatic offset commit (consumer) */
+	int enable_auto_commit;
+	/*! Auto commit interval in milliseconds (consumer) */
+	int auto_commit_interval_ms;
+	/*! Session timeout in milliseconds (consumer) */
+	int session_timeout_ms;
+	/*! Maximum poll interval in milliseconds (consumer) */
+	int max_poll_interval_ms;
 };
 
 /*!
@@ -162,6 +174,45 @@ struct kafka_conf *kafka_config_get(void);
  */
 struct kafka_conf_connection *kafka_config_get_connection(
 	const char *name);
+
+/*! @} */
+
+/*! @{ */
+
+struct ast_kafka_consumer;
+
+/*!
+ * \brief Callback for iterating active consumers.
+ *
+ * \param consumer The consumer object.
+ * \param arg User-supplied argument.
+ * \return 0 to continue, non-zero to stop.
+ */
+typedef int (*kafka_consumer_foreach_cb)(struct ast_kafka_consumer *consumer, void *arg);
+
+/*!
+ * \brief Iterate all active consumers.
+ *
+ * \param cb Callback invoked for each consumer.
+ * \param arg User-supplied argument passed to callback.
+ */
+void kafka_foreach_consumer(kafka_consumer_foreach_cb cb, void *arg);
+
+/*!
+ * \brief Get the name of a consumer.
+ *
+ * \param consumer The consumer object.
+ * \return The consumer name string.
+ */
+const char *kafka_consumer_get_name(struct ast_kafka_consumer *consumer);
+
+/*!
+ * \brief Check if a consumer is subscribed.
+ *
+ * \param consumer The consumer object.
+ * \return Non-zero if subscribed, 0 otherwise.
+ */
+int kafka_consumer_is_subscribed(struct ast_kafka_consumer *consumer);
 
 /*! @} */
 

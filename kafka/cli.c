@@ -1,7 +1,7 @@
 /*
  * Asterisk -- An open source telephony toolkit.
  *
- * Copyright 2015-2024 The Wazo Authors  (see the AUTHORS file)
+ * Copyright 2026 VSGroup (Virtual Sistemas e Tecnologia Ltda)  (see the AUTHORS file)
  *
  * See http://www.asterisk.org for more information about
  * the Asterisk project. Please do not directly contact
@@ -28,6 +28,7 @@
 
 #define CLI_NAME_WIDTH 15
 #define CLI_BROKERS_WIDTH 30
+#define CLI_SUBSCRIBED_WIDTH 12
 
 static int cli_show_connection_summary(void *obj, void *arg, int flags)
 {
@@ -184,6 +185,15 @@ static char *cli_show_connection(struct ast_cli_entry *e, int cmd, struct ast_cl
 	if (!ast_strlen_zero(cxn_conf->debug)) {
 		ast_cli(a->fd, "Debug:                         %s\n", cxn_conf->debug);
 	}
+	/* Consumer-specific config */
+	if (!ast_strlen_zero(cxn_conf->group_id)) {
+		ast_cli(a->fd, "Group ID:                      %s\n", cxn_conf->group_id);
+		ast_cli(a->fd, "Auto offset reset:             %s\n", cxn_conf->auto_offset_reset);
+		ast_cli(a->fd, "Enable auto commit:            %s\n", cxn_conf->enable_auto_commit ? "yes" : "no");
+		ast_cli(a->fd, "Auto commit interval:          %d ms\n", cxn_conf->auto_commit_interval_ms);
+		ast_cli(a->fd, "Session timeout:               %d ms\n", cxn_conf->session_timeout_ms);
+		ast_cli(a->fd, "Max poll interval:             %d ms\n", cxn_conf->max_poll_interval_ms);
+	}
 
 	return NULL;
 }
@@ -255,10 +265,134 @@ static char *cli_test_send(struct ast_cli_entry *e, int cmd, struct ast_cli_args
 	return NULL;
 }
 
+/* ---- Consumer CLI ---- */
+
+struct cli_consumers_arg {
+	struct ast_cli_args *a;
+};
+
+static int cli_show_consumer_summary_cb(struct ast_kafka_consumer *consumer, void *arg)
+{
+	struct cli_consumers_arg *carg = arg;
+	struct ast_cli_args *a = carg->a;
+
+	ast_cli(a->fd, "%-*s %-*s\n",
+		CLI_NAME_WIDTH, kafka_consumer_get_name(consumer),
+		CLI_SUBSCRIBED_WIDTH, kafka_consumer_is_subscribed(consumer) ? "yes" : "no");
+
+	return 0;
+}
+
+static char *cli_show_consumers(struct ast_cli_entry *e, int cmd, struct ast_cli_args *a)
+{
+	struct cli_consumers_arg carg;
+
+	switch (cmd) {
+	case CLI_INIT:
+		e->command = "kafka show consumers";
+		e->usage =
+			"usage: kafka show consumers\n"
+			"       Shows all active Kafka consumers\n";
+		return NULL;
+	case CLI_GENERATE:
+		return NULL;
+	default:
+		break;
+	}
+
+	if (a->argc != 3) {
+		return CLI_SHOWUSAGE;
+	}
+
+	ast_cli(a->fd, "Active consumers:\n");
+	ast_cli(a->fd, "%-*s %-*s\n",
+		CLI_NAME_WIDTH, "Name",
+		CLI_SUBSCRIBED_WIDTH, "Subscribed");
+
+	carg.a = a;
+	kafka_foreach_consumer(cli_show_consumer_summary_cb, &carg);
+
+	return NULL;
+}
+
+struct cli_consumer_find_arg {
+	const char *name;
+	struct ast_kafka_consumer *found;
+};
+
+static int cli_consumer_find_cb(struct ast_kafka_consumer *consumer, void *arg)
+{
+	struct cli_consumer_find_arg *farg = arg;
+
+	if (!strcmp(kafka_consumer_get_name(consumer), farg->name)) {
+		farg->found = consumer;
+		ao2_ref(consumer, +1);
+		return 1; /* stop iteration */
+	}
+
+	return 0;
+}
+
+static char *cli_show_consumer(struct ast_cli_entry *e, int cmd, struct ast_cli_args *a)
+{
+	RAII_VAR(struct kafka_conf_connection *, cxn_conf, NULL, ao2_cleanup);
+	struct cli_consumer_find_arg farg;
+
+	switch (cmd) {
+	case CLI_INIT:
+		e->command = "kafka show consumer";
+		e->usage =
+			"usage: kafka show consumer <name>\n"
+			"       Shows details of a specific Kafka consumer\n";
+		return NULL;
+	case CLI_GENERATE:
+		if (a->pos > 3) {
+			return NULL;
+		}
+		return cli_complete_connection(a->line, a->word, a->n);
+	default:
+		break;
+	}
+
+	if (a->argc != 4) {
+		return CLI_SHOWUSAGE;
+	}
+
+	farg.name = a->argv[3];
+	farg.found = NULL;
+	kafka_foreach_consumer(cli_consumer_find_cb, &farg);
+
+	if (!farg.found) {
+		ast_cli(a->fd, "No active consumer named %s\n", a->argv[3]);
+		return NULL;
+	}
+
+	ast_cli(a->fd, "Name:                          %s\n", kafka_consumer_get_name(farg.found));
+	ast_cli(a->fd, "Subscribed:                    %s\n", kafka_consumer_is_subscribed(farg.found) ? "yes" : "no");
+
+	ao2_ref(farg.found, -1);
+
+	/* Show config details */
+	cxn_conf = kafka_config_get_connection(a->argv[3]);
+	if (cxn_conf) {
+		ast_cli(a->fd, "Brokers:                       %s\n", cxn_conf->brokers);
+		ast_cli(a->fd, "Group ID:                      %s\n", cxn_conf->group_id);
+		ast_cli(a->fd, "Auto offset reset:             %s\n", cxn_conf->auto_offset_reset);
+		ast_cli(a->fd, "Enable auto commit:            %s\n", cxn_conf->enable_auto_commit ? "yes" : "no");
+		ast_cli(a->fd, "Auto commit interval:          %d ms\n", cxn_conf->auto_commit_interval_ms);
+		ast_cli(a->fd, "Session timeout:               %d ms\n", cxn_conf->session_timeout_ms);
+		ast_cli(a->fd, "Max poll interval:             %d ms\n", cxn_conf->max_poll_interval_ms);
+	}
+
+	return NULL;
+}
+
 static struct ast_cli_entry kafka_cli[] = {
 	AST_CLI_DEFINE(cli_show, "Show Kafka settings"),
 	AST_CLI_DEFINE(cli_show_connection, "Show Kafka connection"),
 	AST_CLI_DEFINE(cli_test_send, "Test sending a message"),
+	AST_CLI_DEFINE(cli_show_consumers, "Show active Kafka consumers"),
+	AST_CLI_DEFINE(cli_show_consumer, "Show Kafka consumer details"),
 };
 
 int kafka_cli_register(void)

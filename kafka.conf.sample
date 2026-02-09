@@ -25,7 +25,7 @@
 ;ssl_certificate_location =     ; Path to client certificate (mTLS)
 ;ssl_key_location =             ; Path to client private key (mTLS)
 
-; --- Performance / Batching ---
+; --- Performance / Batching (producer) ---
 ;compression_codec = none       ; none, gzip, snappy, lz4, zstd
                                 ;  defaults to none
 ;compression_level = -1         ; Codec-dependent compression level (-1 = default)
@@ -44,7 +44,7 @@
                                 ; Max producer queue size in KB
                                 ;  defaults to 1048576
 
-; --- Reliability ---
+; --- Reliability (producer) ---
 ;acks = -1                      ; Required acks: -1=all, 0=none, 1=leader
                                 ;  defaults to -1
 ;retries = 2147483647           ; Max send retries
@@ -62,3 +62,18 @@
 ; --- Debug ---
 ;debug =                        ; Comma-separated librdkafka debug contexts
                                 ;  (e.g. broker,topic,msg)
+
+; --- Consumer ---
+; These options are only used when ast_kafka_get_consumer() is called.
+; group_id is required for consumer mode.
+;group_id =                     ; Consumer group ID (required for consumer)
+;auto_offset_reset = latest     ; earliest, latest, none
+                                ;  defaults to latest
+;enable_auto_commit = yes       ; Automatically commit offsets
+                                ;  defaults to yes
+;auto_commit_interval_ms = 5000 ; How often to auto-commit offsets in ms
+                                ;  defaults to 5000
+;session_timeout_ms = 45000     ; Consumer session timeout in ms
+                                ;  defaults to 45000
+;max_poll_interval_ms = 300000  ; Maximum time between poll calls in ms
+                                ;  defaults to 300000
