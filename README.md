@@ -7,7 +7,7 @@ Other Asterisk modules (CDR backends, event publishers, event subscribers, etc.)
 ## Features
 
 - Named connections configured in `kafka.conf` — multiple brokers/clusters supported
-- **Producer**: thread-safe, non-blocking, with automatic QUEUE_FULL retry and flush
+- **Producer**: thread-safe, non-blocking, with automatic QUEUE_FULL retry and flush, optional message headers
 - **Consumer**: callback-based model — subscribe to topics and receive messages via callback from the internal poll thread
 - **Admin**: topic creation via librdkafka Admin API
 - Lazy initialization — producers and consumers are created on first use
@@ -179,7 +179,23 @@ struct ast_kafka_producer *ast_kafka_get_producer(const char *name);
 int ast_kafka_produce(struct ast_kafka_producer *producer,
     const char *topic, const char *key,
     const void *payload, size_t len);
+
+/* Key-value pair for Kafka message headers. */
+struct ast_kafka_header {
+    const char *name;
+    const char *value;
+};
+
+/* Produce a message with optional headers.
+ * If headers is NULL or header_count is 0, behaves like ast_kafka_produce(). */
+int ast_kafka_produce_hdrs(struct ast_kafka_producer *producer,
+    const char *topic, const char *key,
+    const void *payload, size_t len,
+    const struct ast_kafka_header *headers,
+    size_t header_count);
 ```
+
+Headers are Kafka-native key-value metadata that travel alongside the message but **outside the payload**. Consumers and stream processors (Kafka Streams, ksqlDB, Connect SMTs) can read headers without deserializing the body — useful for routing, filtering, and observability. On success, librdkafka takes ownership of the headers; on failure, they are freed automatically.
 
 ### Consumer
 
