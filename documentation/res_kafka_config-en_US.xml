@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE docs SYSTEM "appdocsxml.dtd">
+<docs xmlns:xi="http://www.w3.org/2001/XInclude">
+   <configInfo name="res_kafka" language="en_US">
+       <synopsis>Kafka producer API</synopsis>
+       <configFile name="kafka.conf">
+           <configObject name="general">
+               <synopsis>General configuration settings</synopsis>
+               <configOption name="enabled">
+                   <synopsis>Enable/disable the Kafka module</synopsis>
+                   <description>
+                       <para>This option enables or disables the Kafka module.</para>
+                   </description>
+               </configOption>
+           </configObject>
+
+           <configObject name="connection">
+               <synopsis>Per-connection configuration settings</synopsis>
+               <configOption name="type">
+                   <synopsis>Define this configuration section as a connection.</synopsis>
+                   <description>
+                       <enumlist>
+                           <enum name="connection"><para>Configure this section as a <replaceable>connection</replaceable></para></enum>
+                       </enumlist>
+                   </description>
+               </configOption>
+               <configOption name="brokers">
+                   <synopsis>Broker list to connect to</synopsis>
+                   <description>
+                       <para>Comma-separated list of Kafka brokers in the form <literal>host[:port]</literal>. Defaults to <literal>localhost:9092</literal>.</para>
+                   </description>
+               </configOption>
+               <configOption name="client_id">
+                   <synopsis>Client identifier</synopsis>
+                   <description>
+                       <para>Client identifier string sent to the broker. Defaults to <literal>asterisk</literal>.</para>
+                   </description>
+               </configOption>
+               <configOption name="message_max_bytes">
+                   <synopsis>Maximum message size in bytes</synopsis>
+                   <description>
+                       <para>Maximum size for a message to be produced. Defaults to 1000000.</para>
+                   </description>
+               </configOption>
+               <configOption name="request_timeout_ms">
+                   <synopsis>Request timeout in milliseconds</synopsis>
+                   <description>
+                       <para>The timeout for network requests. Defaults to 5000.</para>
+                   </description>
+               </configOption>
+               <configOption name="message_timeout_ms">
+                   <synopsis>Message delivery timeout in milliseconds</synopsis>
+                   <description>
+                       <para>How long a produced message can be buffered before it is
+                       considered a delivery failure. This controls how long messages
+                       are retained during broker outages. Defaults to 300000 (5 minutes).</para>
+                   </description>
+               </configOption>
+           </configObject>
+       </configFile>
+   </configInfo>
+</docs>

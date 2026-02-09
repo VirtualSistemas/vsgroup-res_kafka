@@ -1,0 +1,16 @@
+[general]
+;enabled = yes  ; Set to no to disable
+
+;[my-kafka]
+;type = connection
+;brokers = localhost:9092       ; Comma-separated list of brokers
+                                ;  defaults to localhost:9092
+;client_id = asterisk           ; Client identifier string
+                                ;  defaults to asterisk
+;message_max_bytes = 1000000    ; Maximum message size in bytes
+                                ;  defaults to 1000000
+;request_timeout_ms = 5000      ; Request timeout in milliseconds
+                                ;  defaults to 5000
+;message_timeout_ms = 300000    ; How long a produced message can be buffered
+                                ;  before it is considered a delivery failure.
+                                ;  Defaults to 300000 (5 minutes)
