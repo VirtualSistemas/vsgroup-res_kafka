@@ -25,6 +25,8 @@ CONFNAME = $(basename $(SAMPLENAME))
 
 TARGET = res_kafka.so
 OBJECTS = res_kafka.o kafka/cli.o kafka/config.o
+TEST_TARGET = test_res_kafka.so
+TEST_OBJECTS = test_res_kafka.o
 CFLAGS += -I.
 CFLAGS += -DHAVE_STDINT_H=1
 CFLAGS += -Wall -Wextra -Wno-unused-parameter -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Winit-self -Wmissing-format-attribute \
@@ -32,10 +34,19 @@ CFLAGS += -Wall -Wextra -Wno-unused-parameter -Wstrict-prototypes -Wmissing-prot
 LIBS += -lrdkafka
 LDFLAGS = -Wall -shared
 
-.PHONY: install clean
+.PHONY: install install-test test clean
 
 $(TARGET): $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OBJECTS) -o $@ $(LIBS)
+
+test_res_kafka.o: test_res_kafka.c
+	$(CC) -c $(CFLAGS) -D'AST_MODULE="test_res_kafka"' \
+	    -D'AST_MODULE_SELF_SYM=__internal_test_res_kafka_self' -o $@ $<
+
+$(TEST_TARGET): $(TEST_OBJECTS)
+	$(CC) $(LDFLAGS) $(TEST_OBJECTS) -o $@ $(LIBS)
+
+test: $(TEST_TARGET)
 
 %.o: %.c $(HEADERS)
 	$(CC) -c $(CFLAGS) -o $@ $<
@@ -54,9 +65,13 @@ install: $(TARGET)
 	@echo " +              make samples                  +"
 	@echo " +--------------------------------------------+"
 
+install-test: $(TEST_TARGET)
+	mkdir -p $(DESTDIR)$(MODULES_DIR)
+	install -m 644 $(TEST_TARGET) $(DESTDIR)$(MODULES_DIR)
+
 clean:
-	rm -f $(OBJECTS)
-	rm -f $(TARGET)
+	rm -f $(OBJECTS) $(TEST_OBJECTS)
+	rm -f $(TARGET) $(TEST_TARGET)
 
 samples:
 	$(INSTALL) -m 644 $(SAMPLENAME) $(DESTDIR)$(ASTETCDIR)/$(CONFNAME)
