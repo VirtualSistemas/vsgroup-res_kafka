@@ -806,6 +806,131 @@ cleanup:
 	return result;
 }
 
+/* ---- Header tests ---- */
+
+AST_TEST_DEFINE(produce_message_with_headers)
+{
+	struct ast_kafka_producer *producer;
+	char topic[64];
+	struct ast_kafka_header hdrs[3];
+	int res;
+
+	switch (cmd) {
+	case TEST_INIT:
+		info->name = "produce_message_with_headers";
+		info->category = TEST_CATEGORY;
+		info->summary = "Produce a message with Kafka headers";
+		info->description =
+			"Checks that ast_kafka_produce_hdrs() succeeds when "
+			"called with multiple key-value headers.";
+		return AST_TEST_NOT_RUN;
+	case TEST_EXECUTE:
+		break;
+	}
+
+	if (!kafka_broker_available(test)) {
+		return AST_TEST_NOT_RUN;
+	}
+
+	producer = ast_kafka_get_producer(TEST_CONNECTION);
+	if (!producer) {
+		ast_test_status_update(test, "Failed to get producer\n");
+		return AST_TEST_FAIL;
+	}
+
+	generate_test_topic(topic, sizeof(topic));
+
+	hdrs[0].name = "entity_id";
+	hdrs[0].value = "00:11:22:33:44:55";
+	hdrs[1].name = "system_name";
+	hdrs[1].value = "pbx-test";
+	hdrs[2].name = "event_type";
+	hdrs[2].value = "Newchannel";
+
+	res = ast_kafka_produce_hdrs(producer, topic, "test-key",
+		"hello", 5, hdrs, 3);
+	if (res != 0) {
+		ast_test_status_update(test,
+			"produce_hdrs with headers failed\n");
+		ao2_cleanup(producer);
+		return AST_TEST_FAIL;
+	}
+
+	ao2_cleanup(producer);
+	return AST_TEST_PASS;
+}
+
+AST_TEST_DEFINE(produce_hdrs_null_headers)
+{
+	struct ast_kafka_producer *producer;
+	char topic[64];
+	int res;
+
+	switch (cmd) {
+	case TEST_INIT:
+		info->name = "produce_hdrs_null_headers";
+		info->category = TEST_CATEGORY;
+		info->summary = "Produce with NULL headers behaves like produce";
+		info->description =
+			"Checks that ast_kafka_produce_hdrs() with NULL headers "
+			"and header_count=0 succeeds identically to ast_kafka_produce().";
+		return AST_TEST_NOT_RUN;
+	case TEST_EXECUTE:
+		break;
+	}
+
+	if (!kafka_broker_available(test)) {
+		return AST_TEST_NOT_RUN;
+	}
+
+	producer = ast_kafka_get_producer(TEST_CONNECTION);
+	if (!producer) {
+		ast_test_status_update(test, "Failed to get producer\n");
+		return AST_TEST_FAIL;
+	}
+
+	generate_test_topic(topic, sizeof(topic));
+
+	res = ast_kafka_produce_hdrs(producer, topic, "key",
+		"payload", 7, NULL, 0);
+	if (res != 0) {
+		ast_test_status_update(test,
+			"produce_hdrs with NULL headers failed\n");
+		ao2_cleanup(producer);
+		return AST_TEST_FAIL;
+	}
+
+	ao2_cleanup(producer);
+	return AST_TEST_PASS;
+}
+
+AST_TEST_DEFINE(produce_hdrs_null_producer)
+{
+	int res;
+
+	switch (cmd) {
+	case TEST_INIT:
+		info->name = "produce_hdrs_null_producer";
+		info->category = TEST_CATEGORY;
+		info->summary = "produce_hdrs with NULL producer returns error";
+		info->description =
+			"Checks that ast_kafka_produce_hdrs(NULL, ...) returns -1.";
+		return AST_TEST_NOT_RUN;
+	case TEST_EXECUTE:
+		break;
+	}
+
+	res = ast_kafka_produce_hdrs(NULL, "topic", NULL, "data", 4, NULL, 0);
+	if (res != -1) {
+		ast_test_status_update(test,
+			"ast_kafka_produce_hdrs(NULL, ...) should return -1, got %d\n",
+			res);
+		return AST_TEST_FAIL;
+	}
+
+	return AST_TEST_PASS;
+}
+
 /* ---- Internal API tests ---- */
 
 struct foreach_test_data {
@@ -892,6 +1017,9 @@ static int load_module(void)
 	AST_TEST_REGISTER(consumer_subscribe_null_params);
 	AST_TEST_REGISTER(ensure_topic);
 	AST_TEST_REGISTER(ensure_topic_null_params);
+	AST_TEST_REGISTER(produce_message_with_headers);
+	AST_TEST_REGISTER(produce_hdrs_null_headers);
+	AST_TEST_REGISTER(produce_hdrs_null_producer);
 	AST_TEST_REGISTER(produce_consume_roundtrip);
 	AST_TEST_REGISTER(consumer_foreach);
 
@@ -912,6 +1040,9 @@ static int unload_module(void)
 	AST_TEST_UNREGISTER(consumer_subscribe_null_params);
 	AST_TEST_UNREGISTER(ensure_topic);
 	AST_TEST_UNREGISTER(ensure_topic_null_params);
+	AST_TEST_UNREGISTER(produce_message_with_headers);
+	AST_TEST_UNREGISTER(produce_hdrs_null_headers);
+	AST_TEST_UNREGISTER(produce_hdrs_null_producer);
 	AST_TEST_UNREGISTER(produce_consume_roundtrip);
 	AST_TEST_UNREGISTER(consumer_foreach);
 

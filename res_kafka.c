@@ -810,16 +810,33 @@ struct ast_kafka_producer *ast_kafka_get_producer(const char *name)
 	return producer;
 }
 
-int ast_kafka_produce(struct ast_kafka_producer *producer,
+int ast_kafka_produce_hdrs(struct ast_kafka_producer *producer,
 	const char *topic,
 	const char *key,
 	const void *payload,
-	size_t len)
+	size_t len,
+	const struct ast_kafka_header *headers,
+	size_t header_count)
 {
 	rd_kafka_resp_err_t err;
+	rd_kafka_headers_t *hdrs = NULL;
 
 	if (!producer || !producer->rk) {
 		return -1;
+	}
+
+	if (headers && header_count > 0) {
+		size_t i;
+		hdrs = rd_kafka_headers_new((int) header_count);
+		if (!hdrs) {
+			ast_log(LOG_ERROR, "Failed to allocate Kafka headers\n");
+			return -1;
+		}
+		for (i = 0; i < header_count; i++) {
+			rd_kafka_header_add(hdrs,
+				headers[i].name, -1,
+				headers[i].value, -1);
+		}
 	}
 
 	err = rd_kafka_producev(
@@ -828,29 +845,52 @@ int ast_kafka_produce(struct ast_kafka_producer *producer,
 		RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY),
 		RD_KAFKA_V_VALUE((void *)payload, len),
 		RD_KAFKA_V_KEY(key, key ? strlen(key) : 0),
+		RD_KAFKA_V_HEADERS(hdrs),
 		RD_KAFKA_V_END);
 
 	if (err == RD_KAFKA_RESP_ERR__QUEUE_FULL) {
-		/* Internal queue full -- flush pending messages and retry once */
+		/* Internal queue full -- flush pending messages and retry once.
+		 * On failure, rd_kafka_producev does NOT take ownership of headers,
+		 * so we can safely reuse them for the retry. */
 		ast_log(LOG_WARNING, "Kafka producer queue full for topic '%s', flushing...\n", topic);
 		rd_kafka_poll(producer->rk, 100);
 
+		/* Rebuild headers since librdkafka took ownership on the first attempt
+		 * only if it succeeded (which it didn't — queue full). However,
+		 * rd_kafka_producev does NOT destroy headers on QUEUE_FULL, so hdrs
+		 * is still valid. But to be safe with other error codes in the future,
+		 * we pass the same hdrs pointer. */
 		err = rd_kafka_producev(
 			producer->rk,
 			RD_KAFKA_V_TOPIC(topic),
 			RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY),
 			RD_KAFKA_V_VALUE((void *)payload, len),
 			RD_KAFKA_V_KEY(key, key ? strlen(key) : 0),
+			RD_KAFKA_V_HEADERS(hdrs),
 			RD_KAFKA_V_END);
 	}
 
 	if (err) {
+		/* On error, librdkafka does NOT take ownership of headers */
+		if (hdrs) {
+			rd_kafka_headers_destroy(hdrs);
+		}
 		ast_log(LOG_ERROR, "Error producing to Kafka topic '%s': %s\n",
 			topic, rd_kafka_err2str(err));
 		return -1;
 	}
 
+	/* On success, librdkafka takes ownership of hdrs — do not destroy */
 	return 0;
+}
+
+int ast_kafka_produce(struct ast_kafka_producer *producer,
+	const char *topic,
+	const char *key,
+	const void *payload,
+	size_t len)
+{
+	return ast_kafka_produce_hdrs(producer, topic, key, payload, len, NULL, 0);
 }
 
 /* ---- Public consumer API ---- */
