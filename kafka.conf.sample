@@ -14,3 +14,51 @@
 ;message_timeout_ms = 300000    ; How long a produced message can be buffered
                                 ;  before it is considered a delivery failure.
                                 ;  Defaults to 300000 (5 minutes)
+
+; --- Security / Authentication ---
+;security_protocol = plaintext  ; plaintext, ssl, sasl_plaintext, sasl_ssl
+                                ;  defaults to plaintext
+;sasl_mechanisms =              ; SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)
+;sasl_username =                ; SASL username
+;sasl_password =                ; SASL password
+;ssl_ca_location =              ; Path to CA certificate file
+;ssl_certificate_location =     ; Path to client certificate (mTLS)
+;ssl_key_location =             ; Path to client private key (mTLS)
+
+; --- Performance / Batching ---
+;compression_codec = none       ; none, gzip, snappy, lz4, zstd
+                                ;  defaults to none
+;compression_level = -1         ; Codec-dependent compression level (-1 = default)
+                                ;  defaults to -1
+;linger_ms = 5                  ; Delay in ms to wait for batching
+                                ;  (librdkafka queue.buffering.max.ms)
+                                ;  defaults to 5
+;batch_num_messages = 10000     ; Max messages per batch
+                                ;  defaults to 10000
+;batch_size = 1000000           ; Max batch size in bytes
+                                ;  defaults to 1000000
+;queue_buffering_max_messages = 100000
+                                ; Max messages in producer queue
+                                ;  defaults to 100000
+;queue_buffering_max_kbytes = 1048576
+                                ; Max producer queue size in KB
+                                ;  defaults to 1048576
+
+; --- Reliability ---
+;acks = -1                      ; Required acks: -1=all, 0=none, 1=leader
+                                ;  defaults to -1
+;retries = 2147483647           ; Max send retries
+                                ;  defaults to 2147483647 (infinite)
+;enable_idempotence = no        ; Enable idempotent producer (exactly-once)
+                                ;  defaults to no
+
+; --- Network / Reconnection ---
+;reconnect_backoff_ms = 100     ; Initial reconnect backoff in ms
+                                ;  defaults to 100
+;reconnect_backoff_max_ms = 10000
+                                ; Maximum reconnect backoff in ms
+                                ;  defaults to 10000
+
+; --- Debug ---
+;debug =                        ; Comma-separated librdkafka debug contexts
+                                ;  (e.g. broker,topic,msg)

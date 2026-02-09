@@ -71,6 +71,24 @@ struct kafka_conf_connection {
 	AST_STRING_FIELD(brokers);
 	/*! The client ID */
 	AST_STRING_FIELD(client_id);
+	/*! Security protocol: plaintext, ssl, sasl_plaintext, sasl_ssl */
+	AST_STRING_FIELD(security_protocol);
+	/*! SASL mechanism (e.g. PLAIN, SCRAM-SHA-256, SCRAM-SHA-512) */
+	AST_STRING_FIELD(sasl_mechanisms);
+	/*! SASL username */
+	AST_STRING_FIELD(sasl_username);
+	/*! SASL password */
+	AST_STRING_FIELD(sasl_password);
+	/*! Path to CA certificate file for SSL */
+	AST_STRING_FIELD(ssl_ca_location);
+	/*! Path to client certificate for SSL */
+	AST_STRING_FIELD(ssl_certificate_location);
+	/*! Path to client private key for SSL */
+	AST_STRING_FIELD(ssl_key_location);
+	/*! Compression codec: none, gzip, snappy, lz4, zstd */
+	AST_STRING_FIELD(compression_codec);
+	/*! librdkafka debug contexts (comma-separated) */
+	AST_STRING_FIELD(debug);
 	);
 
 	/*! Maximum message size in bytes */
@@ -79,6 +97,28 @@ struct kafka_conf_connection {
 	int request_timeout_ms;
 	/*! Message timeout in milliseconds (how long to buffer before giving up) */
 	int message_timeout_ms;
+	/*! Compression level (-1 = codec default) */
+	int compression_level;
+	/*! Delay in ms to wait for messages to batch (queue.buffering.max.ms) */
+	int linger_ms;
+	/*! Maximum number of messages batched in one MessageSet */
+	int batch_num_messages;
+	/*! Maximum size of a batch in bytes */
+	int batch_size;
+	/*! Maximum number of messages in the producer queue */
+	int queue_buffering_max_messages;
+	/*! Maximum total size of messages in the producer queue (kbytes) */
+	int queue_buffering_max_kbytes;
+	/*! Required broker acks: -1=all, 0=none, 1=leader */
+	int acks;
+	/*! Maximum number of send retries */
+	int retries;
+	/*! Enable idempotent producer (exactly-once semantics) */
+	int enable_idempotence;
+	/*! Initial reconnect backoff in milliseconds */
+	int reconnect_backoff_ms;
+	/*! Maximum reconnect backoff in milliseconds */
+	int reconnect_backoff_max_ms;
 };
 
 /*!

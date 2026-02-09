@@ -147,12 +147,43 @@ static char *cli_show_connection(struct ast_cli_entry *e, int cmd, struct ast_cl
 		return NULL;
 	}
 
-	ast_cli(a->fd, "Name:              %s\n", cxn_conf->name);
-	ast_cli(a->fd, "Brokers:           %s\n", cxn_conf->brokers);
-	ast_cli(a->fd, "Client ID:         %s\n", cxn_conf->client_id);
-	ast_cli(a->fd, "Message max bytes: %d\n", cxn_conf->message_max_bytes);
-	ast_cli(a->fd, "Request timeout:   %d ms\n", cxn_conf->request_timeout_ms);
-	ast_cli(a->fd, "Message timeout:   %d ms\n", cxn_conf->message_timeout_ms);
+	ast_cli(a->fd, "Name:                          %s\n", cxn_conf->name);
+	ast_cli(a->fd, "Brokers:                       %s\n", cxn_conf->brokers);
+	ast_cli(a->fd, "Client ID:                     %s\n", cxn_conf->client_id);
+	ast_cli(a->fd, "Message max bytes:             %d\n", cxn_conf->message_max_bytes);
+	ast_cli(a->fd, "Request timeout:               %d ms\n", cxn_conf->request_timeout_ms);
+	ast_cli(a->fd, "Message timeout:               %d ms\n", cxn_conf->message_timeout_ms);
+	ast_cli(a->fd, "Security protocol:             %s\n", cxn_conf->security_protocol);
+	if (!ast_strlen_zero(cxn_conf->sasl_mechanisms)) {
+		ast_cli(a->fd, "SASL mechanisms:               %s\n", cxn_conf->sasl_mechanisms);
+		ast_cli(a->fd, "SASL username:                 %s\n", cxn_conf->sasl_username);
+		ast_cli(a->fd, "SASL password:                 %s\n",
+			ast_strlen_zero(cxn_conf->sasl_password) ? "" : "***");
+	}
+	if (!ast_strlen_zero(cxn_conf->ssl_ca_location)) {
+		ast_cli(a->fd, "SSL CA location:               %s\n", cxn_conf->ssl_ca_location);
+	}
+	if (!ast_strlen_zero(cxn_conf->ssl_certificate_location)) {
+		ast_cli(a->fd, "SSL certificate location:      %s\n", cxn_conf->ssl_certificate_location);
+	}
+	if (!ast_strlen_zero(cxn_conf->ssl_key_location)) {
+		ast_cli(a->fd, "SSL key location:              %s\n", cxn_conf->ssl_key_location);
+	}
+	ast_cli(a->fd, "Compression codec:             %s\n", cxn_conf->compression_codec);
+	ast_cli(a->fd, "Compression level:             %d\n", cxn_conf->compression_level);
+	ast_cli(a->fd, "Linger ms:                     %d\n", cxn_conf->linger_ms);
+	ast_cli(a->fd, "Batch num messages:            %d\n", cxn_conf->batch_num_messages);
+	ast_cli(a->fd, "Batch size:                    %d\n", cxn_conf->batch_size);
+	ast_cli(a->fd, "Queue buffering max messages:  %d\n", cxn_conf->queue_buffering_max_messages);
+	ast_cli(a->fd, "Queue buffering max kbytes:    %d\n", cxn_conf->queue_buffering_max_kbytes);
+	ast_cli(a->fd, "Acks:                          %d\n", cxn_conf->acks);
+	ast_cli(a->fd, "Retries:                       %d\n", cxn_conf->retries);
+	ast_cli(a->fd, "Enable idempotence:            %s\n", cxn_conf->enable_idempotence ? "yes" : "no");
+	ast_cli(a->fd, "Reconnect backoff:             %d ms\n", cxn_conf->reconnect_backoff_ms);
+	ast_cli(a->fd, "Reconnect backoff max:         %d ms\n", cxn_conf->reconnect_backoff_max_ms);
+	if (!ast_strlen_zero(cxn_conf->debug)) {
+		ast_cli(a->fd, "Debug:                         %s\n", cxn_conf->debug);
+	}
 
 	return NULL;
 }

@@ -56,6 +56,148 @@
                        are retained during broker outages. Defaults to 300000 (5 minutes).</para>
                    </description>
                </configOption>
+               <configOption name="security_protocol">
+                   <synopsis>Protocol used to communicate with brokers</synopsis>
+                   <description>
+                       <para>Security protocol: <literal>plaintext</literal>, <literal>ssl</literal>,
+                       <literal>sasl_plaintext</literal>, or <literal>sasl_ssl</literal>.
+                       Defaults to <literal>plaintext</literal>.</para>
+                   </description>
+               </configOption>
+               <configOption name="sasl_mechanisms">
+                   <synopsis>SASL mechanism for authentication</synopsis>
+                   <description>
+                       <para>SASL mechanism to use (e.g. <literal>PLAIN</literal>,
+                       <literal>SCRAM-SHA-256</literal>, <literal>SCRAM-SHA-512</literal>).
+                       Empty by default (no SASL).</para>
+                   </description>
+               </configOption>
+               <configOption name="sasl_username">
+                   <synopsis>SASL username</synopsis>
+                   <description>
+                       <para>Username for SASL authentication. Empty by default.</para>
+                   </description>
+               </configOption>
+               <configOption name="sasl_password">
+                   <synopsis>SASL password</synopsis>
+                   <description>
+                       <para>Password for SASL authentication. Empty by default.</para>
+                   </description>
+               </configOption>
+               <configOption name="ssl_ca_location">
+                   <synopsis>Path to CA certificate file for SSL</synopsis>
+                   <description>
+                       <para>File path to the CA certificate(s) for verifying the broker certificate.
+                       Empty by default.</para>
+                   </description>
+               </configOption>
+               <configOption name="ssl_certificate_location">
+                   <synopsis>Path to client certificate for mTLS</synopsis>
+                   <description>
+                       <para>File path to the client certificate for mutual TLS authentication.
+                       Empty by default.</para>
+                   </description>
+               </configOption>
+               <configOption name="ssl_key_location">
+                   <synopsis>Path to client private key for mTLS</synopsis>
+                   <description>
+                       <para>File path to the client private key for mutual TLS authentication.
+                       Empty by default.</para>
+                   </description>
+               </configOption>
+               <configOption name="compression_codec">
+                   <synopsis>Message compression codec</synopsis>
+                   <description>
+                       <para>Compression codec: <literal>none</literal>, <literal>gzip</literal>,
+                       <literal>snappy</literal>, <literal>lz4</literal>, or <literal>zstd</literal>.
+                       Defaults to <literal>none</literal>.</para>
+                   </description>
+               </configOption>
+               <configOption name="compression_level">
+                   <synopsis>Compression level</synopsis>
+                   <description>
+                       <para>Codec-dependent compression level. -1 uses the codec default.
+                       Defaults to -1.</para>
+                   </description>
+               </configOption>
+               <configOption name="linger_ms">
+                   <synopsis>Producer batching delay in milliseconds</synopsis>
+                   <description>
+                       <para>How long to wait for additional messages before sending a batch
+                       (librdkafka queue.buffering.max.ms). Defaults to 5.</para>
+                   </description>
+               </configOption>
+               <configOption name="batch_num_messages">
+                   <synopsis>Maximum number of messages per batch</synopsis>
+                   <description>
+                       <para>Maximum number of messages batched in one MessageSet.
+                       Defaults to 10000.</para>
+                   </description>
+               </configOption>
+               <configOption name="batch_size">
+                   <synopsis>Maximum batch size in bytes</synopsis>
+                   <description>
+                       <para>Maximum total size of messages in a single batch.
+                       Defaults to 1000000.</para>
+                   </description>
+               </configOption>
+               <configOption name="queue_buffering_max_messages">
+                   <synopsis>Maximum messages in producer queue</synopsis>
+                   <description>
+                       <para>Maximum number of messages allowed in the producer queue.
+                       Defaults to 100000.</para>
+                   </description>
+               </configOption>
+               <configOption name="queue_buffering_max_kbytes">
+                   <synopsis>Maximum producer queue size in kilobytes</synopsis>
+                   <description>
+                       <para>Maximum total message size in the producer queue (in KB).
+                       Defaults to 1048576.</para>
+                   </description>
+               </configOption>
+               <configOption name="acks">
+                   <synopsis>Required broker acknowledgements</synopsis>
+                   <description>
+                       <para>Number of acknowledgements the leader broker must receive:
+                       <literal>-1</literal> (all in-sync replicas), <literal>0</literal> (none),
+                       <literal>1</literal> (leader only). Defaults to -1.</para>
+                   </description>
+               </configOption>
+               <configOption name="retries">
+                   <synopsis>Maximum send retries</synopsis>
+                   <description>
+                       <para>How many times to retry sending a failing message.
+                       Defaults to 2147483647 (effectively infinite).</para>
+                   </description>
+               </configOption>
+               <configOption name="enable_idempotence">
+                   <synopsis>Enable idempotent producer</synopsis>
+                   <description>
+                       <para>When enabled, the producer ensures exactly-once delivery
+                       semantics per partition. Defaults to no.</para>
+                   </description>
+               </configOption>
+               <configOption name="reconnect_backoff_ms">
+                   <synopsis>Initial reconnect backoff in milliseconds</synopsis>
+                   <description>
+                       <para>Initial time to wait before reconnecting to a broker after
+                       a disconnect. Defaults to 100.</para>
+                   </description>
+               </configOption>
+               <configOption name="reconnect_backoff_max_ms">
+                   <synopsis>Maximum reconnect backoff in milliseconds</synopsis>
+                   <description>
+                       <para>Maximum time to wait before reconnecting to a broker
+                       (exponential backoff ceiling). Defaults to 10000.</para>
+                   </description>
+               </configOption>
+               <configOption name="debug">
+                   <synopsis>librdkafka debug contexts</synopsis>
+                   <description>
+                       <para>Comma-separated list of librdkafka debug contexts
+                       (e.g. <literal>broker,topic,msg</literal>). Empty by default.</para>
+                   </description>
+               </configOption>
            </configObject>
        </configFile>
    </configInfo>

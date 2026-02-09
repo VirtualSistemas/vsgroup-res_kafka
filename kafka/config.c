@@ -135,6 +135,86 @@ static int validate_connection_cb(void *obj, void *arg, int flags)
 		cxn_conf->message_timeout_ms = 300000;
 	}
 
+	if (!ast_strlen_zero(cxn_conf->security_protocol) &&
+		strcasecmp(cxn_conf->security_protocol, "plaintext") &&
+		strcasecmp(cxn_conf->security_protocol, "ssl") &&
+		strcasecmp(cxn_conf->security_protocol, "sasl_plaintext") &&
+		strcasecmp(cxn_conf->security_protocol, "sasl_ssl")) {
+		ast_log(LOG_ERROR, "%s: invalid security_protocol '%s' "
+			"(must be plaintext, ssl, sasl_plaintext, or sasl_ssl)\n",
+			cxn_conf->name, cxn_conf->security_protocol);
+		*validation_res = -1;
+		return -1;
+	}
+
+	if (!ast_strlen_zero(cxn_conf->compression_codec) &&
+		strcasecmp(cxn_conf->compression_codec, "none") &&
+		strcasecmp(cxn_conf->compression_codec, "gzip") &&
+		strcasecmp(cxn_conf->compression_codec, "snappy") &&
+		strcasecmp(cxn_conf->compression_codec, "lz4") &&
+		strcasecmp(cxn_conf->compression_codec, "zstd")) {
+		ast_log(LOG_ERROR, "%s: invalid compression_codec '%s' "
+			"(must be none, gzip, snappy, lz4, or zstd)\n",
+			cxn_conf->name, cxn_conf->compression_codec);
+		*validation_res = -1;
+		return -1;
+	}
+
+	if (cxn_conf->linger_ms < 0) {
+		ast_log(LOG_WARNING, "%s: invalid linger_ms %d, using 5\n",
+			cxn_conf->name, cxn_conf->linger_ms);
+		cxn_conf->linger_ms = 5;
+	}
+
+	if (cxn_conf->batch_num_messages < 1) {
+		ast_log(LOG_WARNING, "%s: invalid batch_num_messages %d, using 10000\n",
+			cxn_conf->name, cxn_conf->batch_num_messages);
+		cxn_conf->batch_num_messages = 10000;
+	}
+
+	if (cxn_conf->batch_size < 1) {
+		ast_log(LOG_WARNING, "%s: invalid batch_size %d, using 1000000\n",
+			cxn_conf->name, cxn_conf->batch_size);
+		cxn_conf->batch_size = 1000000;
+	}
+
+	if (cxn_conf->queue_buffering_max_messages < 1) {
+		ast_log(LOG_WARNING, "%s: invalid queue_buffering_max_messages %d, using 100000\n",
+			cxn_conf->name, cxn_conf->queue_buffering_max_messages);
+		cxn_conf->queue_buffering_max_messages = 100000;
+	}
+
+	if (cxn_conf->queue_buffering_max_kbytes < 1) {
+		ast_log(LOG_WARNING, "%s: invalid queue_buffering_max_kbytes %d, using 1048576\n",
+			cxn_conf->name, cxn_conf->queue_buffering_max_kbytes);
+		cxn_conf->queue_buffering_max_kbytes = 1048576;
+	}
+
+	if (cxn_conf->acks < -1 || cxn_conf->acks > 1) {
+		ast_log(LOG_WARNING, "%s: invalid acks %d (must be -1, 0, or 1), using -1\n",
+			cxn_conf->name, cxn_conf->acks);
+		cxn_conf->acks = -1;
+	}
+
+	if (cxn_conf->retries < 0) {
+		ast_log(LOG_WARNING, "%s: invalid retries %d, using 2147483647\n",
+			cxn_conf->name, cxn_conf->retries);
+		cxn_conf->retries = 2147483647;
+	}
+
+	if (cxn_conf->reconnect_backoff_ms < 0) {
+		ast_log(LOG_WARNING, "%s: invalid reconnect_backoff_ms %d, using 100\n",
+			cxn_conf->name, cxn_conf->reconnect_backoff_ms);
+		cxn_conf->reconnect_backoff_ms = 100;
+	}
+
+	if (cxn_conf->reconnect_backoff_max_ms < cxn_conf->reconnect_backoff_ms) {
+		ast_log(LOG_WARNING, "%s: reconnect_backoff_max_ms %d < reconnect_backoff_ms %d, using %d\n",
+			cxn_conf->name, cxn_conf->reconnect_backoff_max_ms,
+			cxn_conf->reconnect_backoff_ms, cxn_conf->reconnect_backoff_ms);
+		cxn_conf->reconnect_backoff_max_ms = cxn_conf->reconnect_backoff_ms;
+	}
+
 	return 0;
 }
 
@@ -183,7 +263,7 @@ static void *kafka_conf_connection_alloc(const char *cat)
 		return NULL;
 	}
 
-	if (ast_string_field_init(cxn_conf, 64) != 0) {
+	if (ast_string_field_init(cxn_conf, 256) != 0) {
 		return NULL;
 	}
 
@@ -240,15 +320,43 @@ int kafka_config_init(void)
 	static char default_message_max_bytes_str[12];
 	static char default_request_timeout_ms_str[12];
 	static char default_message_timeout_ms_str[12];
+	static char default_compression_level_str[12];
+	static char default_linger_ms_str[12];
+	static char default_batch_num_messages_str[12];
+	static char default_batch_size_str[12];
+	static char default_queue_buffering_max_messages_str[12];
+	static char default_queue_buffering_max_kbytes_str[12];
+	static char default_acks_str[12];
+	static char default_retries_str[16];
+	static char default_reconnect_backoff_ms_str[12];
+	static char default_reconnect_backoff_max_ms_str[12];
 
 	snprintf(default_message_max_bytes_str, sizeof(default_message_max_bytes_str),
 		"%d", 1000000);
-
 	snprintf(default_request_timeout_ms_str, sizeof(default_request_timeout_ms_str),
 		"%d", 5000);
-
 	snprintf(default_message_timeout_ms_str, sizeof(default_message_timeout_ms_str),
 		"%d", 300000);
+	snprintf(default_compression_level_str, sizeof(default_compression_level_str),
+		"%d", -1);
+	snprintf(default_linger_ms_str, sizeof(default_linger_ms_str),
+		"%d", 5);
+	snprintf(default_batch_num_messages_str, sizeof(default_batch_num_messages_str),
+		"%d", 10000);
+	snprintf(default_batch_size_str, sizeof(default_batch_size_str),
+		"%d", 1000000);
+	snprintf(default_queue_buffering_max_messages_str, sizeof(default_queue_buffering_max_messages_str),
+		"%d", 100000);
+	snprintf(default_queue_buffering_max_kbytes_str, sizeof(default_queue_buffering_max_kbytes_str),
+		"%d", 1048576);
+	snprintf(default_acks_str, sizeof(default_acks_str),
+		"%d", -1);
+	snprintf(default_retries_str, sizeof(default_retries_str),
+		"%d", 2147483647);
+	snprintf(default_reconnect_backoff_ms_str, sizeof(default_reconnect_backoff_ms_str),
+		"%d", 100);
+	snprintf(default_reconnect_backoff_max_ms_str, sizeof(default_reconnect_backoff_max_ms_str),
+		"%d", 10000);
 
 	if (aco_info_init(&cfg_info) != 0) {
 		ast_log(LOG_ERROR, "Failed to initialize config\n");
@@ -262,24 +370,87 @@ int kafka_config_init(void)
 
 	aco_option_register(&cfg_info, "type", ACO_EXACT, connection_options,
 		NULL, OPT_NOOP_T, 0, 0);
+
+	/* String fields */
 	aco_option_register(&cfg_info, "brokers", ACO_EXACT,
 		connection_options, "localhost:9092", OPT_STRINGFIELD_T, 0,
 		STRFLDSET(struct kafka_conf_connection, brokers));
 	aco_option_register(&cfg_info, "client_id", ACO_EXACT,
 		connection_options, "asterisk", OPT_STRINGFIELD_T, 0,
 		STRFLDSET(struct kafka_conf_connection, client_id));
+	aco_option_register(&cfg_info, "security_protocol", ACO_EXACT,
+		connection_options, "plaintext", OPT_STRINGFIELD_T, 0,
+		STRFLDSET(struct kafka_conf_connection, security_protocol));
+	aco_option_register(&cfg_info, "sasl_mechanisms", ACO_EXACT,
+		connection_options, "", OPT_STRINGFIELD_T, 0,
+		STRFLDSET(struct kafka_conf_connection, sasl_mechanisms));
+	aco_option_register(&cfg_info, "sasl_username", ACO_EXACT,
+		connection_options, "", OPT_STRINGFIELD_T, 0,
+		STRFLDSET(struct kafka_conf_connection, sasl_username));
+	aco_option_register(&cfg_info, "sasl_password", ACO_EXACT,
+		connection_options, "", OPT_STRINGFIELD_T, 0,
+		STRFLDSET(struct kafka_conf_connection, sasl_password));
+	aco_option_register(&cfg_info, "ssl_ca_location", ACO_EXACT,
+		connection_options, "", OPT_STRINGFIELD_T, 0,
+		STRFLDSET(struct kafka_conf_connection, ssl_ca_location));
+	aco_option_register(&cfg_info, "ssl_certificate_location", ACO_EXACT,
+		connection_options, "", OPT_STRINGFIELD_T, 0,
+		STRFLDSET(struct kafka_conf_connection, ssl_certificate_location));
+	aco_option_register(&cfg_info, "ssl_key_location", ACO_EXACT,
+		connection_options, "", OPT_STRINGFIELD_T, 0,
+		STRFLDSET(struct kafka_conf_connection, ssl_key_location));
+	aco_option_register(&cfg_info, "compression_codec", ACO_EXACT,
+		connection_options, "none", OPT_STRINGFIELD_T, 0,
+		STRFLDSET(struct kafka_conf_connection, compression_codec));
+	aco_option_register(&cfg_info, "debug", ACO_EXACT,
+		connection_options, "", OPT_STRINGFIELD_T, 0,
+		STRFLDSET(struct kafka_conf_connection, debug));
 
+	/* Integer fields */
 	aco_option_register(&cfg_info, "message_max_bytes", ACO_EXACT,
 		connection_options, default_message_max_bytes_str, OPT_INT_T, 0,
 		FLDSET(struct kafka_conf_connection, message_max_bytes));
-
 	aco_option_register(&cfg_info, "request_timeout_ms", ACO_EXACT,
 		connection_options, default_request_timeout_ms_str, OPT_INT_T, 0,
 		FLDSET(struct kafka_conf_connection, request_timeout_ms));
-
 	aco_option_register(&cfg_info, "message_timeout_ms", ACO_EXACT,
 		connection_options, default_message_timeout_ms_str, OPT_INT_T, 0,
 		FLDSET(struct kafka_conf_connection, message_timeout_ms));
+	aco_option_register(&cfg_info, "compression_level", ACO_EXACT,
+		connection_options, default_compression_level_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, compression_level));
+	aco_option_register(&cfg_info, "linger_ms", ACO_EXACT,
+		connection_options, default_linger_ms_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, linger_ms));
+	aco_option_register(&cfg_info, "batch_num_messages", ACO_EXACT,
+		connection_options, default_batch_num_messages_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, batch_num_messages));
+	aco_option_register(&cfg_info, "batch_size", ACO_EXACT,
+		connection_options, default_batch_size_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, batch_size));
+	aco_option_register(&cfg_info, "queue_buffering_max_messages", ACO_EXACT,
+		connection_options, default_queue_buffering_max_messages_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, queue_buffering_max_messages));
+	aco_option_register(&cfg_info, "queue_buffering_max_kbytes", ACO_EXACT,
+		connection_options, default_queue_buffering_max_kbytes_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, queue_buffering_max_kbytes));
+	aco_option_register(&cfg_info, "acks", ACO_EXACT,
+		connection_options, default_acks_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, acks));
+	aco_option_register(&cfg_info, "retries", ACO_EXACT,
+		connection_options, default_retries_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, retries));
+	aco_option_register(&cfg_info, "reconnect_backoff_ms", ACO_EXACT,
+		connection_options, default_reconnect_backoff_ms_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, reconnect_backoff_ms));
+	aco_option_register(&cfg_info, "reconnect_backoff_max_ms", ACO_EXACT,
+		connection_options, default_reconnect_backoff_max_ms_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, reconnect_backoff_max_ms));
+
+	/* Boolean fields */
+	aco_option_register(&cfg_info, "enable_idempotence", ACO_EXACT,
+		connection_options, "no", OPT_BOOL_T, 1,
+		FLDSET(struct kafka_conf_connection, enable_idempotence));
 
 	return process_config(0);
 }

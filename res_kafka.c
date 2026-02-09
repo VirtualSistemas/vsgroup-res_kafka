@@ -83,6 +83,148 @@
                        are retained during broker outages. Defaults to 300000 (5 minutes).</para>
                    </description>
                </configOption>
+               <configOption name="security_protocol">
+                   <synopsis>Protocol used to communicate with brokers</synopsis>
+                   <description>
+                       <para>Security protocol: <literal>plaintext</literal>, <literal>ssl</literal>,
+                       <literal>sasl_plaintext</literal>, or <literal>sasl_ssl</literal>.
+                       Defaults to <literal>plaintext</literal>.</para>
+                   </description>
+               </configOption>
+               <configOption name="sasl_mechanisms">
+                   <synopsis>SASL mechanism for authentication</synopsis>
+                   <description>
+                       <para>SASL mechanism to use (e.g. <literal>PLAIN</literal>,
+                       <literal>SCRAM-SHA-256</literal>, <literal>SCRAM-SHA-512</literal>).
+                       Empty by default (no SASL).</para>
+                   </description>
+               </configOption>
+               <configOption name="sasl_username">
+                   <synopsis>SASL username</synopsis>
+                   <description>
+                       <para>Username for SASL authentication. Empty by default.</para>
+                   </description>
+               </configOption>
+               <configOption name="sasl_password">
+                   <synopsis>SASL password</synopsis>
+                   <description>
+                       <para>Password for SASL authentication. Empty by default.</para>
+                   </description>
+               </configOption>
+               <configOption name="ssl_ca_location">
+                   <synopsis>Path to CA certificate file for SSL</synopsis>
+                   <description>
+                       <para>File path to the CA certificate(s) for verifying the broker certificate.
+                       Empty by default.</para>
+                   </description>
+               </configOption>
+               <configOption name="ssl_certificate_location">
+                   <synopsis>Path to client certificate for mTLS</synopsis>
+                   <description>
+                       <para>File path to the client certificate for mutual TLS authentication.
+                       Empty by default.</para>
+                   </description>
+               </configOption>
+               <configOption name="ssl_key_location">
+                   <synopsis>Path to client private key for mTLS</synopsis>
+                   <description>
+                       <para>File path to the client private key for mutual TLS authentication.
+                       Empty by default.</para>
+                   </description>
+               </configOption>
+               <configOption name="compression_codec">
+                   <synopsis>Message compression codec</synopsis>
+                   <description>
+                       <para>Compression codec: <literal>none</literal>, <literal>gzip</literal>,
+                       <literal>snappy</literal>, <literal>lz4</literal>, or <literal>zstd</literal>.
+                       Defaults to <literal>none</literal>.</para>
+                   </description>
+               </configOption>
+               <configOption name="compression_level">
+                   <synopsis>Compression level</synopsis>
+                   <description>
+                       <para>Codec-dependent compression level. -1 uses the codec default.
+                       Defaults to -1.</para>
+                   </description>
+               </configOption>
+               <configOption name="linger_ms">
+                   <synopsis>Producer batching delay in milliseconds</synopsis>
+                   <description>
+                       <para>How long to wait for additional messages before sending a batch
+                       (librdkafka queue.buffering.max.ms). Defaults to 5.</para>
+                   </description>
+               </configOption>
+               <configOption name="batch_num_messages">
+                   <synopsis>Maximum number of messages per batch</synopsis>
+                   <description>
+                       <para>Maximum number of messages batched in one MessageSet.
+                       Defaults to 10000.</para>
+                   </description>
+               </configOption>
+               <configOption name="batch_size">
+                   <synopsis>Maximum batch size in bytes</synopsis>
+                   <description>
+                       <para>Maximum total size of messages in a single batch.
+                       Defaults to 1000000.</para>
+                   </description>
+               </configOption>
+               <configOption name="queue_buffering_max_messages">
+                   <synopsis>Maximum messages in producer queue</synopsis>
+                   <description>
+                       <para>Maximum number of messages allowed in the producer queue.
+                       Defaults to 100000.</para>
+                   </description>
+               </configOption>
+               <configOption name="queue_buffering_max_kbytes">
+                   <synopsis>Maximum producer queue size in kilobytes</synopsis>
+                   <description>
+                       <para>Maximum total message size in the producer queue (in KB).
+                       Defaults to 1048576.</para>
+                   </description>
+               </configOption>
+               <configOption name="acks">
+                   <synopsis>Required broker acknowledgements</synopsis>
+                   <description>
+                       <para>Number of acknowledgements the leader broker must receive:
+                       <literal>-1</literal> (all in-sync replicas), <literal>0</literal> (none),
+                       <literal>1</literal> (leader only). Defaults to -1.</para>
+                   </description>
+               </configOption>
+               <configOption name="retries">
+                   <synopsis>Maximum send retries</synopsis>
+                   <description>
+                       <para>How many times to retry sending a failing message.
+                       Defaults to 2147483647 (effectively infinite).</para>
+                   </description>
+               </configOption>
+               <configOption name="enable_idempotence">
+                   <synopsis>Enable idempotent producer</synopsis>
+                   <description>
+                       <para>When enabled, the producer ensures exactly-once delivery
+                       semantics per partition. Defaults to no.</para>
+                   </description>
+               </configOption>
+               <configOption name="reconnect_backoff_ms">
+                   <synopsis>Initial reconnect backoff in milliseconds</synopsis>
+                   <description>
+                       <para>Initial time to wait before reconnecting to a broker after
+                       a disconnect. Defaults to 100.</para>
+                   </description>
+               </configOption>
+               <configOption name="reconnect_backoff_max_ms">
+                   <synopsis>Maximum reconnect backoff in milliseconds</synopsis>
+                   <description>
+                       <para>Maximum time to wait before reconnecting to a broker
+                       (exponential backoff ceiling). Defaults to 10000.</para>
+                   </description>
+               </configOption>
+               <configOption name="debug">
+                   <synopsis>librdkafka debug contexts</synopsis>
+                   <description>
+                       <para>Comma-separated list of librdkafka debug contexts
+                       (e.g. <literal>broker,topic,msg</literal>). Empty by default.</para>
+                   </description>
+               </configOption>
            </configObject>
        </configFile>
    </configInfo>
@@ -248,6 +390,22 @@ static void *kafka_poll_thread(void *data)
 	return NULL;
 }
 
+/*! \brief Helper macro to set a librdkafka config option, cleaning up on failure */
+#define KAFKA_CONF_SET(conf, key, val) do { \
+	if (rd_kafka_conf_set(conf, key, val, errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) { \
+		ast_log(LOG_ERROR, "Kafka config error (%s): %s\n", key, errstr); \
+		rd_kafka_conf_destroy(conf); \
+		ao2_cleanup(producer); \
+		return NULL; \
+	} \
+} while (0)
+
+/*! \brief Helper macro to set a librdkafka config option from an int value */
+#define KAFKA_CONF_SET_INT(conf, key, intval) do { \
+	snprintf(value_str, sizeof(value_str), "%d", intval); \
+	KAFKA_CONF_SET(conf, key, value_str); \
+} while (0)
+
 static struct ast_kafka_producer *kafka_producer_create(
 	const char *name)
 {
@@ -280,47 +438,55 @@ static struct ast_kafka_producer *kafka_producer_create(
 		return NULL;
 	}
 
-	if (rd_kafka_conf_set(conf, "bootstrap.servers", cxn_conf->brokers,
-		errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-		ast_log(LOG_ERROR, "Kafka config error: %s\n", errstr);
-		rd_kafka_conf_destroy(conf);
-		ao2_cleanup(producer);
-		return NULL;
+	/* Core connection */
+	KAFKA_CONF_SET(conf, "bootstrap.servers", cxn_conf->brokers);
+	KAFKA_CONF_SET(conf, "client.id", cxn_conf->client_id);
+	KAFKA_CONF_SET_INT(conf, "message.max.bytes", cxn_conf->message_max_bytes);
+	KAFKA_CONF_SET_INT(conf, "request.timeout.ms", cxn_conf->request_timeout_ms);
+	KAFKA_CONF_SET_INT(conf, "message.timeout.ms", cxn_conf->message_timeout_ms);
+
+	/* Security / Authentication */
+	KAFKA_CONF_SET(conf, "security.protocol", cxn_conf->security_protocol);
+	if (!ast_strlen_zero(cxn_conf->sasl_mechanisms)) {
+		KAFKA_CONF_SET(conf, "sasl.mechanisms", cxn_conf->sasl_mechanisms);
+	}
+	if (!ast_strlen_zero(cxn_conf->sasl_username)) {
+		KAFKA_CONF_SET(conf, "sasl.username", cxn_conf->sasl_username);
+	}
+	if (!ast_strlen_zero(cxn_conf->sasl_password)) {
+		KAFKA_CONF_SET(conf, "sasl.password", cxn_conf->sasl_password);
+	}
+	if (!ast_strlen_zero(cxn_conf->ssl_ca_location)) {
+		KAFKA_CONF_SET(conf, "ssl.ca.location", cxn_conf->ssl_ca_location);
+	}
+	if (!ast_strlen_zero(cxn_conf->ssl_certificate_location)) {
+		KAFKA_CONF_SET(conf, "ssl.certificate.location", cxn_conf->ssl_certificate_location);
+	}
+	if (!ast_strlen_zero(cxn_conf->ssl_key_location)) {
+		KAFKA_CONF_SET(conf, "ssl.key.location", cxn_conf->ssl_key_location);
 	}
 
-	if (rd_kafka_conf_set(conf, "client.id", cxn_conf->client_id,
-		errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-		ast_log(LOG_ERROR, "Kafka config error: %s\n", errstr);
-		rd_kafka_conf_destroy(conf);
-		ao2_cleanup(producer);
-		return NULL;
-	}
+	/* Performance / Batching */
+	KAFKA_CONF_SET(conf, "compression.codec", cxn_conf->compression_codec);
+	KAFKA_CONF_SET_INT(conf, "compression.level", cxn_conf->compression_level);
+	KAFKA_CONF_SET_INT(conf, "queue.buffering.max.ms", cxn_conf->linger_ms);
+	KAFKA_CONF_SET_INT(conf, "batch.num.messages", cxn_conf->batch_num_messages);
+	KAFKA_CONF_SET_INT(conf, "batch.size", cxn_conf->batch_size);
+	KAFKA_CONF_SET_INT(conf, "queue.buffering.max.messages", cxn_conf->queue_buffering_max_messages);
+	KAFKA_CONF_SET_INT(conf, "queue.buffering.max.kbytes", cxn_conf->queue_buffering_max_kbytes);
 
-	snprintf(value_str, sizeof(value_str), "%d", cxn_conf->message_max_bytes);
-	if (rd_kafka_conf_set(conf, "message.max.bytes", value_str,
-		errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-		ast_log(LOG_ERROR, "Kafka config error: %s\n", errstr);
-		rd_kafka_conf_destroy(conf);
-		ao2_cleanup(producer);
-		return NULL;
-	}
+	/* Reliability */
+	KAFKA_CONF_SET_INT(conf, "request.required.acks", cxn_conf->acks);
+	KAFKA_CONF_SET_INT(conf, "message.send.max.retries", cxn_conf->retries);
+	KAFKA_CONF_SET(conf, "enable.idempotence", cxn_conf->enable_idempotence ? "true" : "false");
 
-	snprintf(value_str, sizeof(value_str), "%d", cxn_conf->request_timeout_ms);
-	if (rd_kafka_conf_set(conf, "request.timeout.ms", value_str,
-		errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-		ast_log(LOG_ERROR, "Kafka config error: %s\n", errstr);
-		rd_kafka_conf_destroy(conf);
-		ao2_cleanup(producer);
-		return NULL;
-	}
+	/* Network / Reconnection */
+	KAFKA_CONF_SET_INT(conf, "reconnect.backoff.ms", cxn_conf->reconnect_backoff_ms);
+	KAFKA_CONF_SET_INT(conf, "reconnect.backoff.max.ms", cxn_conf->reconnect_backoff_max_ms);
 
-	snprintf(value_str, sizeof(value_str), "%d", cxn_conf->message_timeout_ms);
-	if (rd_kafka_conf_set(conf, "message.timeout.ms", value_str,
-		errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-		ast_log(LOG_ERROR, "Kafka config error: %s\n", errstr);
-		rd_kafka_conf_destroy(conf);
-		ao2_cleanup(producer);
-		return NULL;
+	/* Debug */
+	if (!ast_strlen_zero(cxn_conf->debug)) {
+		KAFKA_CONF_SET(conf, "debug", cxn_conf->debug);
 	}
 
 	rd_kafka_conf_set_log_cb(conf, kafka_log_callback);
@@ -338,6 +504,9 @@ static struct ast_kafka_producer *kafka_producer_create(
 
 	return producer;
 }
+
+#undef KAFKA_CONF_SET
+#undef KAFKA_CONF_SET_INT
 
 struct ast_kafka_producer *ast_kafka_get_producer(const char *name)
 {
