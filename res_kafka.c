@@ -436,31 +436,142 @@ static void kafka_consumer_dtor(void *obj)
 	}
 }
 
+/* ---- Log rate-limiting ---- */
+
+/*!
+ * \brief Interval (in seconds) between repeated log messages from the same client.
+ *
+ * When a Kafka broker is down, librdkafka fires error/log callbacks many times
+ * per second.  We suppress duplicates and log a summary every this many seconds.
+ */
+#define KAFKA_LOG_SUPPRESS_SECS 30
+
+/*! Maximum number of distinct rdkafka client instances we track for rate-limiting */
+#define KAFKA_RATELIMIT_SLOTS 16
+
+struct kafka_ratelimit_slot {
+	char name[128];
+	struct timeval last_time;
+	unsigned int suppressed;
+};
+
+static struct kafka_ratelimit_slot log_cb_slots[KAFKA_RATELIMIT_SLOTS];
+static ast_mutex_t log_cb_slots_lock = AST_MUTEX_INIT_VALUE;
+
+static struct kafka_ratelimit_slot err_cb_slots[KAFKA_RATELIMIT_SLOTS];
+static ast_mutex_t err_cb_slots_lock = AST_MUTEX_INIT_VALUE;
+
+/*!
+ * \brief Check whether a log message should be emitted or suppressed.
+ * \param slots Array of ratelimit slots (must have KAFKA_RATELIMIT_SLOTS entries)
+ * \param lock  Mutex protecting the array
+ * \param name  Client name (from rd_kafka_name)
+ * \param[out] suppressed_count  If non-NULL, filled with the number of messages
+ *             suppressed since the last emit (only meaningful when returning 1)
+ * \retval 1 message should be logged
+ * \retval 0 message should be suppressed
+ */
+static int kafka_ratelimit_allow(struct kafka_ratelimit_slot *slots,
+	ast_mutex_t *lock, const char *name, unsigned int *suppressed_count)
+{
+	int i;
+	int empty_slot = -1;
+	int oldest_slot = 0;
+	struct timeval now = ast_tvnow();
+	int allow = 1;
+
+	ast_mutex_lock(lock);
+
+	/* Find existing slot for this client, or pick a free/oldest one */
+	for (i = 0; i < KAFKA_RATELIMIT_SLOTS; i++) {
+		if (ast_strlen_zero(slots[i].name)) {
+			if (empty_slot < 0) {
+				empty_slot = i;
+			}
+			continue;
+		}
+		if (!strcmp(slots[i].name, name)) {
+			/* Found existing slot */
+			int elapsed = ast_tvdiff_ms(now, slots[i].last_time) / 1000;
+			if (elapsed < KAFKA_LOG_SUPPRESS_SECS) {
+				slots[i].suppressed++;
+				allow = 0;
+			} else {
+				if (suppressed_count) {
+					*suppressed_count = slots[i].suppressed;
+				}
+				slots[i].last_time = now;
+				slots[i].suppressed = 0;
+				allow = 1;
+			}
+			ast_mutex_unlock(lock);
+			return allow;
+		}
+		/* Track oldest slot for eviction */
+		if (ast_tvdiff_ms(slots[i].last_time, slots[oldest_slot].last_time) < 0) {
+			oldest_slot = i;
+		}
+	}
+
+	/* New client — use empty slot or evict oldest */
+	i = (empty_slot >= 0) ? empty_slot : oldest_slot;
+	ast_copy_string(slots[i].name, name, sizeof(slots[i].name));
+	slots[i].last_time = now;
+	slots[i].suppressed = 0;
+	if (suppressed_count) {
+		*suppressed_count = 0;
+	}
+
+	ast_mutex_unlock(lock);
+	return 1;
+}
+
 /* ---- Shared callbacks ---- */
 
 static void kafka_log_callback(const rd_kafka_t *rk, int level,
 	const char *fac, const char *buf)
 {
+	unsigned int suppressed = 0;
+
 	/* librdkafka passes syslog levels: EMERG=0, ALERT=1, CRIT=2, ERR=3,
 	 * WARNING=4, NOTICE=5, INFO=6, DEBUG=7.
 	 * We cannot use <syslog.h> constants here because Asterisk's logger.h
 	 * redefines LOG_WARNING, LOG_NOTICE, etc. as its own macros. */
+
+	/* Debug/info messages are already gated by ast_debug level — no need to rate-limit */
+	if (level >= 6) {
+		ast_debug(3, "rdkafka [%s]: %s: %s\n",
+			rd_kafka_name(rk), fac, buf);
+		return;
+	}
+
+	/* Rate-limit error/warning messages */
+	if (!kafka_ratelimit_allow(log_cb_slots, &log_cb_slots_lock,
+		rd_kafka_name(rk), &suppressed)) {
+		return;
+	}
+
 	switch (level) {
 	case 0: /* LOG_EMERG */
 	case 1: /* LOG_ALERT */
 	case 2: /* LOG_CRIT */
 	case 3: /* LOG_ERR */
-		ast_log(LOG_ERROR, "rdkafka [%s]: %s: %s\n",
-			rd_kafka_name(rk), fac, buf);
+		if (suppressed) {
+			ast_log(LOG_ERROR, "rdkafka [%s]: %s: %s (%u similar messages suppressed)\n",
+				rd_kafka_name(rk), fac, buf, suppressed);
+		} else {
+			ast_log(LOG_ERROR, "rdkafka [%s]: %s: %s\n",
+				rd_kafka_name(rk), fac, buf);
+		}
 		break;
-	case 4: /* LOG_WARNING */
-	case 5: /* LOG_NOTICE */
-		ast_log(LOG_WARNING, "rdkafka [%s]: %s: %s\n",
-			rd_kafka_name(rk), fac, buf);
-		break;
-	default: /* LOG_INFO=6, LOG_DEBUG=7 */
-		ast_debug(3, "rdkafka [%s]: %s: %s\n",
-			rd_kafka_name(rk), fac, buf);
+	default: /* LOG_WARNING, LOG_NOTICE */
+		if (suppressed) {
+			ast_log(LOG_WARNING, "rdkafka [%s]: %s: %s (%u similar messages suppressed)\n",
+				rd_kafka_name(rk), fac, buf, suppressed);
+		} else {
+			ast_log(LOG_WARNING, "rdkafka [%s]: %s: %s\n",
+				rd_kafka_name(rk), fac, buf);
+		}
 		break;
 	}
 }
@@ -480,11 +591,26 @@ static void kafka_dr_msg_callback(rd_kafka_t *rk,
 static void kafka_error_callback(rd_kafka_t *rk, int err,
 	const char *reason, void *opaque)
 {
+	unsigned int suppressed = 0;
+
+	/* FATAL errors are always logged immediately */
 	if (err == RD_KAFKA_RESP_ERR__FATAL) {
 		char fatal_errstr[256];
 		rd_kafka_resp_err_t fatal_err = rd_kafka_fatal_error(rk, fatal_errstr, sizeof(fatal_errstr));
 		ast_log(LOG_ERROR, "rdkafka FATAL ERROR [%s]: %s (%s) - instance must be restarted\n",
 			rd_kafka_name(rk), rd_kafka_err2str(fatal_err), fatal_errstr);
+		return;
+	}
+
+	/* Rate-limit non-fatal errors (broker down, transport failures, etc.) */
+	if (!kafka_ratelimit_allow(err_cb_slots, &err_cb_slots_lock,
+		rd_kafka_name(rk), &suppressed)) {
+		return;
+	}
+
+	if (suppressed) {
+		ast_log(LOG_WARNING, "rdkafka error [%s]: %s: %s (%u similar errors suppressed)\n",
+			rd_kafka_name(rk), rd_kafka_err2str(err), reason, suppressed);
 	} else {
 		ast_log(LOG_WARNING, "rdkafka error [%s]: %s: %s\n",
 			rd_kafka_name(rk), rd_kafka_err2str(err), reason);
