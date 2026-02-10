@@ -58,6 +58,10 @@
 ;reconnect_backoff_max_ms = 10000
                                 ; Maximum reconnect backoff in ms
                                 ;  defaults to 10000
+;socket_timeout_ms = 10000      ; Socket timeout for broker connections in ms.
+                                ;  Lower values speed up failure detection when
+                                ;  brokers are unreachable. Minimum 1000.
+                                ;  defaults to 10000
 
 ; --- Debug ---
 ;debug =                        ; Comma-separated librdkafka debug contexts

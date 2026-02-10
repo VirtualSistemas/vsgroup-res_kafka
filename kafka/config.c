@@ -215,6 +215,12 @@ static int validate_connection_cb(void *obj, void *arg, int flags)
 		cxn_conf->reconnect_backoff_max_ms = cxn_conf->reconnect_backoff_ms;
 	}
 
+	if (cxn_conf->socket_timeout_ms < 1000) {
+		ast_log(LOG_WARNING, "%s: invalid socket_timeout_ms %d, using 10000\n",
+			cxn_conf->name, cxn_conf->socket_timeout_ms);
+		cxn_conf->socket_timeout_ms = 10000;
+	}
+
 	/* Consumer-specific validation */
 	if (!ast_strlen_zero(cxn_conf->auto_offset_reset) &&
 		strcasecmp(cxn_conf->auto_offset_reset, "earliest") &&
@@ -360,6 +366,7 @@ int kafka_config_init(void)
 	static char default_retries_str[16];
 	static char default_reconnect_backoff_ms_str[12];
 	static char default_reconnect_backoff_max_ms_str[12];
+	static char default_socket_timeout_ms_str[12];
 	static char default_auto_commit_interval_ms_str[12];
 	static char default_session_timeout_ms_str[12];
 	static char default_max_poll_interval_ms_str[12];
@@ -389,6 +396,8 @@ int kafka_config_init(void)
 	snprintf(default_reconnect_backoff_ms_str, sizeof(default_reconnect_backoff_ms_str),
 		"%d", 100);
 	snprintf(default_reconnect_backoff_max_ms_str, sizeof(default_reconnect_backoff_max_ms_str),
+		"%d", 10000);
+	snprintf(default_socket_timeout_ms_str, sizeof(default_socket_timeout_ms_str),
 		"%d", 10000);
 	snprintf(default_auto_commit_interval_ms_str, sizeof(default_auto_commit_interval_ms_str),
 		"%d", 5000);
@@ -485,6 +494,9 @@ int kafka_config_init(void)
 	aco_option_register(&cfg_info, "reconnect_backoff_max_ms", ACO_EXACT,
 		connection_options, default_reconnect_backoff_max_ms_str, OPT_INT_T, 0,
 		FLDSET(struct kafka_conf_connection, reconnect_backoff_max_ms));
+	aco_option_register(&cfg_info, "socket_timeout_ms", ACO_EXACT,
+		connection_options, default_socket_timeout_ms_str, OPT_INT_T, 0,
+		FLDSET(struct kafka_conf_connection, socket_timeout_ms));
 
 	/* Boolean fields */
 	aco_option_register(&cfg_info, "enable_idempotence", ACO_EXACT,

@@ -218,6 +218,15 @@
                        (exponential backoff ceiling). Defaults to 10000.</para>
                    </description>
                </configOption>
+               <configOption name="socket_timeout_ms">
+                   <synopsis>Socket timeout in milliseconds</synopsis>
+                   <description>
+                       <para>Default timeout for network requests to the broker
+                       (librdkafka socket.timeout.ms). Reducing this value speeds
+                       up failure detection when brokers are unreachable.
+                       Minimum 1000. Defaults to 10000.</para>
+                   </description>
+               </configOption>
                <configOption name="debug">
                    <synopsis>librdkafka debug contexts</synopsis>
                    <description>
@@ -280,6 +289,7 @@
 
 #include "asterisk/module.h"
 #include "asterisk/kafka.h"
+#include "asterisk/taskprocessor.h"
 #include "kafka/internal.h"
 
 #include <librdkafka/rdkafka.h>
@@ -294,9 +304,19 @@ static struct ao2_container *active_consumers;
 static pthread_t poll_thread_id = AST_PTHREADT_NULL;
 static int poll_thread_run;
 
+static struct ast_taskprocessor *kafka_admin_tp;
+
+struct ensure_topic_task {
+	struct ast_kafka_producer *producer;
+	char topic[256];
+	int num_partitions;
+	int replication_factor;
+};
+
 struct ast_kafka_producer
 {
 	rd_kafka_t *rk;
+	int request_timeout_ms;
 	char name[];
 };
 
@@ -747,6 +767,7 @@ static int kafka_conf_apply_shared(rd_kafka_conf_t *conf,
 	/* Network / Reconnection */
 	KAFKA_CONF_SET_INT(conf, "reconnect.backoff.ms", cxn_conf->reconnect_backoff_ms);
 	KAFKA_CONF_SET_INT(conf, "reconnect.backoff.max.ms", cxn_conf->reconnect_backoff_max_ms);
+	KAFKA_CONF_SET_INT(conf, "socket.timeout.ms", cxn_conf->socket_timeout_ms);
 
 	/* Debug */
 	if (!ast_strlen_zero(cxn_conf->debug)) {
@@ -788,6 +809,7 @@ static struct ast_kafka_producer *kafka_producer_create(
 	}
 
 	strcpy(producer->name, name); /* SAFE */
+	producer->request_timeout_ms = cxn_conf->request_timeout_ms;
 
 	conf = rd_kafka_conf_new();
 	if (!conf) {
@@ -1192,7 +1214,7 @@ int ast_kafka_ensure_topic(struct ast_kafka_producer *producer,
 
 	options = rd_kafka_AdminOptions_new(producer->rk,
 		RD_KAFKA_ADMIN_OP_CREATETOPICS);
-	if (rd_kafka_AdminOptions_set_request_timeout(options, 10000,
+	if (rd_kafka_AdminOptions_set_request_timeout(options, producer->request_timeout_ms,
 		errstr, sizeof(errstr)) != RD_KAFKA_RESP_ERR_NO_ERROR) {
 		ast_log(LOG_WARNING, "Failed to set admin timeout: %s\n", errstr);
 	}
@@ -1202,7 +1224,7 @@ int ast_kafka_ensure_topic(struct ast_kafka_producer *producer,
 	rd_kafka_CreateTopics(producer->rk, topics, 1, options, queue);
 
 	/* Wait for result */
-	event = rd_kafka_queue_poll(queue, 15000);
+	event = rd_kafka_queue_poll(queue, producer->request_timeout_ms + 2000);
 	if (!event) {
 		ast_log(LOG_ERROR, "Timeout waiting for CreateTopics result "
 			"for '%s'\n", topic);
@@ -1252,6 +1274,49 @@ cleanup:
 	return res;
 }
 
+/* ---- Async admin API ---- */
+
+static int ensure_topic_task_cb(void *data)
+{
+	struct ensure_topic_task *task = data;
+
+	ast_kafka_ensure_topic(task->producer, task->topic,
+		task->num_partitions, task->replication_factor);
+
+	ao2_cleanup(task->producer);
+	ast_free(task);
+	return 0;
+}
+
+int ast_kafka_ensure_topic_async(struct ast_kafka_producer *producer,
+	const char *topic, int num_partitions, int replication_factor)
+{
+	struct ensure_topic_task *task;
+
+	if (!producer || ast_strlen_zero(topic) || !kafka_admin_tp) {
+		return -1;
+	}
+
+	task = ast_calloc(1, sizeof(*task));
+	if (!task) {
+		return -1;
+	}
+
+	ao2_ref(producer, +1);
+	task->producer = producer;
+	ast_copy_string(task->topic, topic, sizeof(task->topic));
+	task->num_partitions = num_partitions;
+	task->replication_factor = replication_factor;
+
+	if (ast_taskprocessor_push(kafka_admin_tp, ensure_topic_task_cb, task)) {
+		ao2_cleanup(task->producer);
+		ast_free(task);
+		return -1;
+	}
+
+	return 0;
+}
+
 /* ---- Module lifecycle ---- */
 
 static int load_module(void)
@@ -1279,9 +1344,18 @@ static int load_module(void)
 		return AST_MODULE_LOAD_FAILURE;
 	}
 
+	kafka_admin_tp = ast_taskprocessor_get("kafka-admin", TPS_REF_DEFAULT);
+	if (!kafka_admin_tp) {
+		ast_log(LOG_ERROR, "Failed to create Kafka admin taskprocessor\n");
+		ao2_cleanup(active_consumers);
+		ao2_cleanup(active_producers);
+		return AST_MODULE_LOAD_FAILURE;
+	}
+
 	poll_thread_run = 1;
 	if (ast_pthread_create_background(&poll_thread_id, NULL, kafka_poll_thread, NULL) < 0) {
 		ast_log(LOG_ERROR, "Failed to create Kafka poll thread\n");
+		ao2_cleanup(kafka_admin_tp);
 		ao2_cleanup(active_consumers);
 		ao2_cleanup(active_producers);
 		return AST_MODULE_LOAD_FAILURE;
@@ -1291,6 +1365,7 @@ static int load_module(void)
 		ast_log(LOG_ERROR, "Failed to register Kafka CLI\n");
 		poll_thread_run = 0;
 		pthread_join(poll_thread_id, NULL);
+		ao2_cleanup(kafka_admin_tp);
 		ao2_cleanup(active_consumers);
 		ao2_cleanup(active_producers);
 		return AST_MODULE_LOAD_FAILURE;
@@ -1308,6 +1383,7 @@ static int unload_module(void)
 	}
 
 	kafka_cli_unregister();
+	ao2_cleanup(kafka_admin_tp);
 	ao2_cleanup(active_consumers);
 	ao2_cleanup(active_producers);
 	kafka_config_destroy();

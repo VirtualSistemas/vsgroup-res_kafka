@@ -123,6 +123,8 @@ struct kafka_conf_connection {
 	int reconnect_backoff_ms;
 	/*! Maximum reconnect backoff in milliseconds */
 	int reconnect_backoff_max_ms;
+	/*! Socket timeout in milliseconds (socket.timeout.ms) */
+	int socket_timeout_ms;
 	/*! Enable automatic offset commit (consumer) */
 	int enable_auto_commit;
 	/*! Auto commit interval in milliseconds (consumer) */

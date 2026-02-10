@@ -191,6 +191,15 @@
                        (exponential backoff ceiling). Defaults to 10000.</para>
                    </description>
                </configOption>
+               <configOption name="socket_timeout_ms">
+                   <synopsis>Socket timeout in milliseconds</synopsis>
+                   <description>
+                       <para>Default timeout for network requests to the broker
+                       (librdkafka socket.timeout.ms). Reducing this value speeds
+                       up failure detection when brokers are unreachable.
+                       Minimum 1000. Defaults to 10000.</para>
+                   </description>
+               </configOption>
                <configOption name="debug">
                    <synopsis>librdkafka debug contexts</synopsis>
                    <description>
